@@ -57,7 +57,7 @@ The workshop is structured as three additive milestones. Each milestone is a sta
 | Milestone | Directory | New concept |
 |-----------|-----------|-------------|
 | 1 | `milestone-1/` | HTTP call to Ollama — sends a prompt, prints the reply |
-| 2 | `milestone-2/` | Tool struct + tools slice — adds `read_file` / `write_file` and passes tools in the request |
+| 2 | `milestone-2/` | Tool struct + tools slice — adds `read_file` / `write_file`, passes tools in the request; the model now *asks* to call one (we surface it but don't run it) |
 | 3 | `milestone-3/` | Agent loop + dispatch + history — wraps Milestone 2 in a `for` loop with `switch` dispatch and `[]Message` accumulation |
 | 4 *(optional)* | `milestone-4/` | Output validation + self-correction — a deterministic check on the LLM's result, fed back into the loop so the agent retries |
 
@@ -65,12 +65,12 @@ Each milestone = previous milestone + one concept block. If you fall behind, loc
 
 ## Optional Milestone 4 — Don't Trust the Model, Test It
 
-For attendees already fluent with the agent loop. An LLM is **probabilistic**: "reverse this text" is a request, not a guarantee. The model may drop a character, keep the order, or never write the file. Milestone 4 adds the missing piece — **verify the output, and feed failures back into the loop**.
+For attendees already fluent with the agent loop. An LLM is **probabilistic**: "uppercase this text" is a request, not a guarantee. `llama3.2` gets this exact task right only about **1 in 3** runs — it may leave a letter lowercase, alter a word, write a `$(...)` placeholder, or never write the file. Milestone 4 adds the missing piece — **verify the output, and feed failures back into the loop**.
 
 It introduces one concept block over Milestone 3:
 
-- `checkReversal(original, output)` — a deterministic check on the result (the reversed text must have the same length as the original). Returns every failure it finds.
-- `validateReversal(src, dst)` — reads both files and runs the checks.
+- `checkUppercase(original, output)` — a deterministic check on the result (the output must equal the original with every letter uppercased). Returns every failure it finds.
+- `validateUppercase(src, dst)` — reads both files and runs the checks.
 - A loop that, when the model says it's done, **validates before trusting it**. On failure it sends the failure message back as a new user turn — the agent self-corrects. A `maxTurns` cap prevents an infinite "fix it / still wrong" cycle.
 
 The checks live in plain functions, so you can unit-test them with **no Ollama and no network**:

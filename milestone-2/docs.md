@@ -4,7 +4,9 @@
 >
 > **Builds on:** [Milestone 1](./milestone-1.md) — same single HTTP call. The only change is *what we put in the request*.
 
-A plain LLM can only produce text. To *do* things — read a file, write a file — it needs **tools**: functions we expose and describe to the model. In this milestone we **declare** the tools and ship their schemas in the request. We do **not** yet execute them — that's Milestone 3. This step is about the data plumbing.
+A plain LLM can only produce text. To *do* things — read a file, write a file — it needs **tools**: functions we expose and describe to the model. In this milestone we **declare** the tools and ship their schemas in the request. We do **not** yet execute them — that's Milestone 3.
+
+The prompt this time is `"Read the file demo.txt and tell me what it contains."` — a task the model *cannot* answer without a tool. So instead of plain text, the model replies with a **tool call**: "run `read_file` with `path: demo.txt`." We print that request and stop — we declared the tool but have no code to run it. That dangling, un-executed call is exactly the gap Milestone 3 fills.
 
 ---
 
@@ -150,18 +152,18 @@ sequenceDiagram
     M->>M: project → []ToolDef (no Run)
     M->>O: POST /api/chat {prompt, tools}
     O-->>M: ChatResponse
-    Note over M,O: model may reply with text<br/>OR a tool_calls request
-    M->>M: fmt.Println(Content)
-    Note over M: ⚠ tool calls are NOT executed yet
+    Note over M,O: prompt needs a file →<br/>model replies with a tool_calls request
+    M->>M: print "model wants to call read_file(...)"
+    Note over M: ⚠ the tool call is NOT executed yet
 ```
 
-The prompt is still `"What is 2+2?"` — a question that needs no tools — so in practice the model just answers. The point of this milestone is that the request is now *tool-aware*. Wiring up the actual call-and-respond cycle is the next step.
+Because the prompt (`"Read the file demo.txt..."`) can't be answered from the model's own knowledge, the reply comes back as a **tool call**, not text. `msg.Content` is usually empty; the request lives in `msg.ToolCalls`. We surface it and exit — the request is now *tool-aware* and the model is actively asking to act, but nothing runs it. Wiring up the actual call-and-respond cycle is the next step.
 
 ---
 
 ## The gap this leaves
 
-If the model *did* ask to call a tool, this program would ignore it: it prints `msg.Content` and exits, exactly like Milestone 1. There's no code that:
+The model **did** ask to call a tool — we printed the request and bailed. There's no code that:
 
 1. looks at `msg.ToolCalls`,
 2. finds the matching `Tool`,
@@ -174,10 +176,14 @@ That call-execute-respond cycle, wrapped in a loop with memory, **is** Milestone
 
 ## Run it
 
+`demo.txt` must exist in the project root (where you run the binary).
+
 ```bash
 go build -o ./milestone-2-bin ./milestone-2/
 ./milestone-2-bin
 ```
+
+Expected: a line like `model wants to call read_file(map[path:demo.txt]) — but Milestone 2 does not run it`. The model asked to act; we don't. That's the cliffhanger Milestone 3 resolves.
 
 Note this milestone logs to **stderr** (`slog.NewTextHandler(os.Stderr, ...)`) instead of stdout — handy for separating diagnostics from the model's actual answer on stdout.
 

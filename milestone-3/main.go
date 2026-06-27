@@ -113,11 +113,11 @@ func main() {
 		}
 	}
 
-	// Read-Only promp
-	// prompt := "Read the file demo.txt, and count the number of characters"
+	// Read-Only prompt
+	// prompt := "Read the file demo.txt and tell me what it contains"
 
 	// Read-Write prompt
-	prompt := "Read the file demo.txt, then write its contents reversed to reversed.txt"
+	prompt := "Read the file demo.txt, convert its contents to UPPERCASE, then write the result to uppercase.txt"
 
 	messages := []Message{{Role: "user", Content: prompt}}
 

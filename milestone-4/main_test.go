@@ -7,25 +7,26 @@ import "testing"
 //
 //	go test ./milestone-4/
 
-// Same length but different content still passes — the check only asserts that
-// reversing preserved the length, not the exact order.
-func TestCheckReversalPasses(t *testing.T) {
-	if failures := checkReversal("hello", "olleh"); len(failures) != 0 {
+// Correct uppercasing passes — output equals the original with every letter
+// uppercased.
+func TestCheckUppercasePasses(t *testing.T) {
+	if failures := checkUppercase("hello agent workshop", "HELLO AGENT WORKSHOP"); len(failures) != 0 {
 		t.Errorf("expected no failures, got %v", failures)
 	}
 }
 
-// A dropped character changes the length — the kind of bug a probabilistic
-// model produces and a deterministic check catches.
-func TestCheckReversalCatchesLengthChange(t *testing.T) {
-	if failures := checkReversal("hello", "olle"); len(failures) == 0 {
-		t.Error("expected a length-change failure, got none")
+// A lowercase letter left untouched is the kind of bug a probabilistic model
+// produces and a deterministic check catches.
+func TestCheckUppercaseCatchesMissedLetter(t *testing.T) {
+	if failures := checkUppercase("hello agent workshop", "HELLO AGENT WORKSHOp"); len(failures) == 0 {
+		t.Error("expected a failure for the un-uppercased letter, got none")
 	}
 }
 
-// An added character also changes the length.
-func TestCheckReversalCatchesAddedChar(t *testing.T) {
-	if failures := checkReversal("hello", "ollehh"); len(failures) == 0 {
-		t.Error("expected a length-change failure, got none")
+// Dropped or altered content also fails — the output no longer matches the
+// uppercased original.
+func TestCheckUppercaseCatchesChangedContent(t *testing.T) {
+	if failures := checkUppercase("hello agent workshop", "HELLO WORKSHOP"); len(failures) == 0 {
+		t.Error("expected a failure for changed content, got none")
 	}
 }
