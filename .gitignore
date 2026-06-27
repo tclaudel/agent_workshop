@@ -5,7 +5,7 @@ skills/bmad-*/
 .claude/skills/bmad-*/
 
 # generated demo output — not committed (Decision #3)
-**/reversed.txt
+**/uppercase.txt
 
 # compiled binaries — build artifacts, never committed
 agent-demo

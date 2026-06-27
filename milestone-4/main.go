@@ -64,24 +64,24 @@ var httpClient = &http.Client{Timeout: 60 * time.Second}
 // this bound protects against an infinite "fix it / still wrong" cycle.
 const maxTurns = 10
 
-// checkReversal is the test we run on the model's output. An LLM is
-// probabilistic — "reverse this text" is a request, not a guarantee — so we
-// assert an invariant we care about: reversing must not change the length.
-// An empty slice means the output passed. (Checking the exact reverse would
-// be stricter; length alone keeps the example simple and still catches the
-// most common failure — the model dropping or adding characters.)
-func checkReversal(original, output string) []string {
+// checkUppercase is the test we run on the model's output. An LLM is
+// probabilistic — "uppercase this text" is a request, not a guarantee — so we
+// assert the property we care about: the output must equal the original with
+// every letter uppercased. Unlike a general transform, uppercasing is cheap to
+// verify *exactly*, so we do. An empty slice means the output passed. The
+// slice return lets you add more assertions later and report them all at once.
+func checkUppercase(original, output string) []string {
 	var failures []string
-	if len(output) != len(original) {
-		failures = append(failures, fmt.Sprintf("length changed: original is %d bytes, output is %d bytes", len(original), len(output)))
+	if want := strings.ToUpper(original); output != want {
+		failures = append(failures, fmt.Sprintf("not fully uppercased: expected %q, got %q", want, output))
 	}
 	return failures
 }
 
-// validateReversal reads the source and result files off disk and runs
-// checkReversal on them. It returns ok=false plus a human-readable message
+// validateUppercase reads the source and result files off disk and runs
+// checkUppercase on them. It returns ok=false plus a human-readable message
 // that we feed straight back to the model so it can correct itself.
-func validateReversal(srcPath, dstPath string) (ok bool, feedback string) {
+func validateUppercase(srcPath, dstPath string) (ok bool, feedback string) {
 	src, err := os.ReadFile(srcPath)
 	if err != nil {
 		return false, fmt.Sprintf("could not read source %s: %v", srcPath, err)
@@ -91,12 +91,13 @@ func validateReversal(srcPath, dstPath string) (ok bool, feedback string) {
 		return false, fmt.Sprintf("could not read %s — did you write it? %v", dstPath, err)
 	}
 
-	// Ignore a trailing newline on either side so the check focuses on the
-	// content the model is responsible for, not file-ending conventions.
-	original := strings.TrimRight(string(src), "\n")
-	output := strings.TrimRight(string(dst), "\n")
+	// Ignore trailing line endings (\n or \r\n) on either side so the check
+	// focuses on the content the model is responsible for, not file-ending
+	// conventions — demo.txt may have Windows CRLF.
+	original := strings.TrimRight(string(src), "\r\n")
+	output := strings.TrimRight(string(dst), "\r\n")
 
-	if failures := checkReversal(original, output); len(failures) > 0 {
+	if failures := checkUppercase(original, output); len(failures) > 0 {
 		return false, "validation failed: " + strings.Join(failures, "; ")
 	}
 	return true, ""
@@ -157,7 +158,7 @@ func main() {
 		}
 	}
 
-	prompt := "Read the file demo.txt, then write its contents reversed to reversed.txt"
+	prompt := "Read the file demo.txt, convert its contents to UPPERCASE, then write the result to uppercase.txt"
 
 	messages := []Message{{Role: "user", Content: prompt}}
 
@@ -205,7 +206,7 @@ func main() {
 		if len(msg.ToolCalls) == 0 {
 			// The model thinks it is done. Don't trust it — verify the output
 			// against our deterministic checks first.
-			ok, feedback := validateReversal("demo.txt", "reversed.txt")
+			ok, feedback := validateUppercase("demo.txt", "uppercase.txt")
 			if ok {
 				logger.Info("validation passed")
 				fmt.Println(msg.Content)
@@ -214,7 +215,7 @@ func main() {
 			// Tests failed. Hand the failure back as a new user turn and let
 			// the agent loop take another shot. This is the loop self-correcting.
 			logger.Warn("validation failed", slog.String("feedback", feedback))
-			messages = append(messages, Message{Role: "user", Content: feedback + " — please fix reversed.txt."})
+			messages = append(messages, Message{Role: "user", Content: feedback + " — please fix uppercase.txt."})
 			continue
 		}
 

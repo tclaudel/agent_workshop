@@ -14,8 +14,8 @@ Complete these **before** attendees arrive:
   - [ ] Day-of: confirm all registered participants are in the group before Phase 1 starts
 - [ ] Build `agent-demo` from source: `go build -o agent-demo ./milestone-3/` → binary appears in repo root
 - [ ] Verify Ollama is running and `llama3.2` is pulled: `ollama run llama3.2 "hello"` → returns a response
-- [ ] Run the demo dry: `./agent-demo < demo-task.txt` — confirm it completes in under 2 minutes and produces `reversed.txt`
-- [ ] Delete `reversed.txt` after dry run: `rm -f reversed.txt`
+- [ ] Run the demo dry: `./agent-demo < demo-task.txt` — confirm it completes in under 2 minutes and produces `uppercase.txt`. **Note:** the task fails its own check ~2 of 3 runs (`llama3.2` is weak at this), but `agent-demo` (Milestone 3) has *no* validation, so it always exits "successfully" regardless — that's the point. Run it 2–3 times so you've seen both a clean result and a botched one before the room does.
+- [ ] Delete `uppercase.txt` after dry run: `rm -f uppercase.txt`
 
 ---
 
@@ -31,7 +31,7 @@ Complete these **before** attendees arrive:
 ./agent-demo < demo-task.txt
 ```
 
-Watch: the agent uses its `read_file` tool to read `demo.txt`, then writes `reversed.txt`. (`demo-task.txt` is the task prompt piped via stdin — `demo.txt` is the file the agent reads and reverses.) Files appear. The loop runs. Text prints.
+Watch: the agent uses its `read_file` tool to read `demo.txt`, then writes `uppercase.txt`. (`demo-task.txt` is the task prompt piped via stdin — `demo.txt` is the file the agent reads and uppercases.) Files appear. The loop runs. Text prints.
 
 **Verbal cue:** *"Watch what this does — we'll come back to it."*
 
@@ -101,7 +101,7 @@ go build -o ./milestone-3-bin ./milestone-3/
 ./milestone-3-bin
 ```
 
-Expected: the agent reads `demo.txt`, writes `reversed.txt`, stops when no more tool calls.
+Expected: the agent reads `demo.txt`, writes `uppercase.txt`, stops when no more tool calls. The result is often *wrong* (a lowercase letter, a dropped word, a `$(...)` placeholder) yet the loop still prints "Done" — Milestone 3 has nothing that checks. Flag this out loud; it's the hook for Milestone 4.
 
 **What to do:** Walk attendees through the `for` loop in `milestone-3/main.go`. Show the stop condition (`len(msg.ToolCalls) == 0`) **before** the switch dispatch — this order is critical. Show how `messages` accumulates history. Let them build and run.
 
@@ -201,11 +201,11 @@ go build -o ./milestone-4-bin ./milestone-4/
 ./milestone-4-bin
 ```
 
-Expected: `go test` passes 3 checks with no Ollama running (the checks are pure functions). The binary reads `demo.txt`, writes `reversed.txt`, validates it, and stops once validation passes.
+Expected: `go test` passes 3 checks with no Ollama running (the checks are pure functions). The binary reads `demo.txt`, writes `uppercase.txt`, validates it, and stops once validation passes — usually after one or more visible `validation failed` retries, since the model only nails it ~1 of 3 attempts. This is the payoff: the room watches the *same* flaky task from Phase 1 now self-correct to a right answer.
 
 **What to do:** Walk attendees through three things in `milestone-4/main.go`:
 
-- `checkReversal` — the invariant we assert on the result (the reversed text must keep the same length). *"This is the test. The model made a request to reverse; this is us checking it didn't drop or add characters."*
+- `checkUppercase` — the property we assert on the result (output must equal the original uppercased). *"This is the test. The model made a request to uppercase; this is us checking it actually did — every letter, no dropped words."*
 - The validation branch where `len(msg.ToolCalls) == 0` used to just `break` — now it verifies before trusting the model, and on failure appends a `user` message and loops again.
 - `maxTurns` — *"the self-correction loop needs a stop, or a stubborn model loops forever."*
 

@@ -2,9 +2,11 @@
 
 > **New concept:** actually *run* the tools. Wrap the request in a `for` loop, dispatch each tool call, feed the result back, and keep the growing conversation as memory — until the model has no more tools to call.
 >
-> **Builds on:** [Milestone 2](./milestone-2.md) — same tools, same types. Milestone 2 *declared* tools; this milestone *executes* them in a loop.
+> **Builds on:** [Milestone 2](./milestone-2.md) — same tools, same types. Milestone 2 ended on a cliffhanger: the model asked to call `read_file`, and we printed the request and quit. This milestone picks up that exact dangling call and **runs it** — then feeds the result back so the model can take the next step.
 
 This is the milestone where the program becomes an **agent**: a system that takes an action, observes the result, and decides what to do next — repeatedly — without us scripting each step.
+
+Milestone 2 got one tool *request* out of the model and threw it away. The whole job here is to stop throwing it away: execute the call, hand the model the result, and let it keep going. Do that in a loop and a single ignored request becomes a multi-step agent that reads a file, uppercases it, and writes the result — none of which we scripted by hand.
 
 ---
 
@@ -27,26 +29,19 @@ flowchart TD
     result --> send
 ```
 
-The conversation slice (`messages`) **is** the agent's memory. Every reply and every tool result gets appended, so each new request carries the entire history. That's what lets the model say "I read the file, here are its contents, now I'll write the reversed version" across multiple turns.
+The conversation slice (`messages`) **is** the agent's memory. Every reply and every tool result gets appended, so each new request carries the entire history. That's what lets the model say "I read the file, here are its contents, now I'll write the uppercased version" across multiple turns.
 
 ---
 
 ## What changed since Milestone 2
 
-Three additions, one tweak:
+Three additions:
 
 1. **The `for` loop** around the request (was a single call).
 2. **A dispatch map** `toolsByName` for O(1) lookup of which tool to run.
 3. **History accumulation** — `messages` grows every turn instead of being a fixed one-element slice.
-4. **Tweak:** `ToolCallFunction.Arguments` is now `map[string]any` (was `string`), so we can pass the parsed args straight into `Tool.Run`.
 
-```diff
-  type ToolCallFunction struct {
-  	Name      string         `json:"name"`
-- 	Arguments string         `json:"arguments"`
-+ 	Arguments map[string]any `json:"arguments"`   // parsed args, ready for Run()
-  }
-```
+(`ToolCallFunction.Arguments` is already `map[string]any` from Milestone 2 — the parsed args drop straight into `Tool.Run`.)
 
 There's also a shared HTTP client with a timeout — a small robustness upgrade now that we make many calls:
 
@@ -76,7 +71,7 @@ for i := range tools {
 ## The loop, line by line
 
 ```go
-prompt := "Read the file demo.txt, then write its contents reversed to reversed.txt"
+prompt := "Read the file demo.txt, convert its contents to UPPERCASE, then write the result to uppercase.txt"
 messages := []Message{{Role: "user", Content: prompt}}
 
 for {
@@ -118,7 +113,7 @@ For each requested call: find the tool, run it, and append its output as a `"too
 
 ---
 
-## A concrete run: "reverse demo.txt into reversed.txt"
+## A concrete run: "uppercase demo.txt into uppercase.txt"
 
 ```mermaid
 sequenceDiagram
@@ -127,17 +122,17 @@ sequenceDiagram
     participant O as Ollama
     participant FS as filesystem
 
-    U->>A: "read demo.txt, write reversed to reversed.txt"
+    U->>A: "read demo.txt, write UPPERCASE to uppercase.txt"
     A->>O: messages=[user]
     O-->>A: tool_call read_file{path:"demo.txt"}
     A->>FS: os.ReadFile("demo.txt")
-    FS-->>A: "hello"
-    A->>O: messages=[user, assistant, tool:"hello"]
-    O-->>A: tool_call write_file{path:"reversed.txt", content:"olleh"}
-    A->>FS: os.WriteFile("reversed.txt", "olleh")
+    FS-->>A: "hello agent workshop"
+    A->>O: messages=[user, assistant, tool:"hello agent workshop"]
+    O-->>A: tool_call write_file{path:"uppercase.txt", content:"HELLO AGENT WORKSHOP"}
+    A->>FS: os.WriteFile("uppercase.txt", "HELLO AGENT WORKSHOP")
     FS-->>A: "ok"
     A->>O: messages=[..., tool:"ok"]
-    O-->>A: "Done! I reversed the text." (no tool calls)
+    O-->>A: "Done! I uppercased the text." (no tool calls)
     A->>U: print Content, exit
 ```
 
@@ -153,13 +148,14 @@ Tool results go back with `Role: "tool"`, distinct from `"user"` and `"assistant
 
 ## The catch this leaves (motivates Milestone 4)
 
-This loop trusts the model completely. When it says "Done, I reversed the text," we believe it and exit. But an LLM is **probabilistic** — it might:
+This loop trusts the model completely. When it says "Done, I uppercased the text," we believe it and exit. But an LLM is **probabilistic** — it might:
 
-- drop or duplicate a character,
-- not actually reverse the text,
+- leave some letters lowercase,
+- drop or alter words instead of just changing case,
+- write a placeholder like `$(read_file.content)` instead of the real text,
 - forget to write the file at all.
 
-Nothing here checks. [Milestone 4](./milestone-4.md) adds a deterministic verification step before trusting that final answer — and feeds failures back into *this same loop* so the agent corrects itself.
+This is not hypothetical: `llama3.2` gets this exact task right only about **1 in 3** runs. Nothing here checks. [Milestone 4](./milestone-4.md) adds a deterministic verification step before trusting that final answer — and feeds failures back into *this same loop* so the agent corrects itself.
 
 ---
 
@@ -172,7 +168,7 @@ go build -o ./milestone-3-bin ./milestone-3/
 ./milestone-3-bin
 ```
 
-Expected: JSON logs of each turn, a freshly written `reversed.txt`, and a final confirmation line.
+Expected: JSON logs of each turn, a freshly written `uppercase.txt`, and a final confirmation line. Run it a few times — roughly 2 of 3 runs the model botches the result (a stray lowercase letter, a `$(...)` placeholder, a dropped word) yet still says "Done." That unchecked failure is exactly what Milestone 4 fixes.
 
 ---
 

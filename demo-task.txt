@@ -1,1 +1,1 @@
-Read the file demo.txt, then write its contents reversed to reversed.txt
+Read the file demo.txt, convert its contents to UPPERCASE, then write the result to uppercase.txt

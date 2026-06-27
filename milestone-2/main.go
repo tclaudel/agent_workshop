@@ -29,8 +29,8 @@ type ChatResponse struct {
 }
 
 type ToolCallFunction struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"` // Ollama returns parsed args as a JSON object
 }
 
 type ToolCall struct {
@@ -99,7 +99,7 @@ func main() {
 		}
 	}
 
-	prompt := "What is 2+2?"
+	prompt := "Read the file demo.txt and tell me what it contains."
 
 	chatRequest := ChatRequest{
 		Model: "llama3.2",
@@ -134,6 +134,20 @@ func main() {
 	}
 
 	logger.Info("received response", slog.Any("response", result))
+
+	// The model answered our tool-aware request. Two outcomes:
+	//   - plain text  → Content is non-empty, we print it (just like Milestone 1).
+	//   - tool call    → the model asks us to run read_file. Content is usually
+	//                     empty; the real payload is in ToolCalls.
+	// This milestone only DECLARES tools, so we surface the request and stop.
+	// Executing it (and feeding the result back) is Milestone 3.
+	if len(result.Message.ToolCalls) > 0 {
+		for _, tc := range result.Message.ToolCalls {
+			fmt.Printf("model wants to call %s(%v) — but Milestone 2 does not run it\n",
+				tc.Function.Name, tc.Function.Arguments)
+		}
+		return
+	}
 
 	fmt.Println(result.Message.Content)
 }
